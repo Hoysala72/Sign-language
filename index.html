@@ -1,0 +1,122 @@
+{% extends "base.html" %}
+{% block title %}Home{% endblock %}
+
+{% block content %}
+<div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+  <!-- Left: Welcome and About -->
+  <div class="flex flex-col justify-center">
+    <h1 class="text-4xl font-extrabold text-blue-800 mb-4">Welcome to Silent Voices</h1>
+    <p class="text-lg text-gray-700 mb-6">
+      Empowering communication with real-time sign language recognition.<br>
+      Use your webcam to detect Sign Language (ASL) letters and common phrases instantly.<br>
+      <span class="font-semibold">Sign up</span> to save your detection history, practice signs, and help us improve the dataset!
+    </p>
+    <div class="flex space-x-4 mb-8">
+      {% if not current_user.is_authenticated %}
+        <a href="{{ url_for('register') }}" class="px-6 py-3 bg-green-600 text-white rounded-lg font-bold hover:bg-green-700 transition">Get Started</a>
+        <a href="{{ url_for('about') }}" class="px-6 py-3 bg-blue-700 text-white rounded-lg font-bold hover:bg-blue-800 transition">Learn More</a>
+      {% else %}
+        <a href="{{ url_for('history') }}" class="px-6 py-3 bg-blue-700 text-white rounded-lg font-bold hover:bg-blue-800 transition">Your History</a>
+        <a href="{{ url_for('practice') }}" class="px-6 py-3 bg-green-600 text-white rounded-lg font-bold hover:bg-green-700 transition">Practice Sign</a>
+      {% endif %}
+    </div>
+    <div>
+      <h2 class="text-xl font-semibold text-blue-700 mb-2">Features:</h2>
+      <ul class="list-disc list-inside text-gray-700 space-y-1">
+        <li>Real-time sign language recognition via webcam</li>
+        <li>Personal detection history (for registered users)</li>
+        <li>Practice mode for sign learning</li>
+        <li>Modern, mobile-friendly interface</li>
+        <li>Open source and privacy-friendly</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- Right: Video Feed and Real-time Detection -->
+  <div class="bg-white rounded-lg shadow-lg p-6 flex flex-col items-center space-y-6">
+    <h2 class="text-2xl font-bold text-blue-700">Live Video Feed</h2>
+     <div class="w-full aspect-w-16 aspect-h-9 bg-gray-200 rounded-lg overflow-hidden mb-4">
+        <img src="{{ url_for('video_feed') }}" class="object-cover w-full h-full" alt="Webcam Feed">
+    </div>
+
+    <h2 class="text-2xl font-bold text-blue-700 mt-6">Live Detection</h2>
+    <div class="w-full text-center">
+      <div id="prediction-text" class="text-4xl font-extrabold text-blue-900 mb-2">-</div>
+      <div class="w-full h-3 bg-gray-200 rounded-full mb-2">
+        <div id="confidence-bar" class="h-3 bg-blue-500 rounded-full transition-all duration-300" style="width:0%"></div>
+      </div>
+      <div id="confidence-text" class="text-gray-600">0% Confidence</div>
+
+      <h3>Current Word: <span id="current-word">-</span></h3>
+      <h3>Formed Sentence: <span id="sentence-text">-</span></h3>
+      <div id="practice-feedback" class="mt-4"></div>
+    </div>
+  </div>
+
+  <!-- Additional Section: Sample Sign Images -->
+  <div class="mt-12">
+    <h2 class="text-2xl font-bold text-blue-700 mb-4 text-center">ASL Hand Signs</h2>
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 my-8">
+      <img src="{{ url_for('static', filename='images/hand-signs-of-the-ASL-Language.png') }}"
+           alt="ASL Chart 1" class="rounded-lg shadow-md w-full h-auto">
+      <img src="{{ url_for('static', filename='images/sign language 2.jpg') }}"
+           alt="ASL Chart 2" class="rounded-lg shadow-md w-full h-auto">
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    const targetSign = "{{ target_sign | default('', true) }}";  // blank if not in practice mode
+    let lastSpoken = "";
+
+    function updatePrediction() {
+        fetch('/get_prediction')
+            .then(response => response.json())
+            .then(data => {
+                const predictionText = data.text;
+                const confidence = parseFloat(data.confidence);
+
+                document.getElementById('prediction-text').innerText = predictionText;
+                document.getElementById('current-word').innerText = predictionText;
+                document.getElementById('confidence-bar').style.width = `${confidence * 100}%`;
+                document.getElementById('confidence-text').innerText = `${Math.round(confidence * 100)}% Confidence`;
+
+                // Practice feedback logic
+                if (targetSign && predictionText !== '-') {
+                    let feedback = "";
+                    if (predictionText === targetSign && confidence > 0.7) {
+                        feedback = "<span class='text-green-600 font-bold'>Great job! You matched the sign!</span>";
+                    } else if (confidence > 0.7) {
+                        feedback = "<span class='text-red-600 font-bold'>That's the sign for " + predictionText + ". Try again!</span>";
+                    } else {
+                        feedback = "<span class='text-gray-500'>Show your sign clearly to the camera.</span>";
+                    }
+                    document.getElementById('practice-feedback').innerHTML = feedback;
+                }
+
+                // Text-to-speech
+                if (predictionText !== '-' && confidence > 0.7 && predictionText !== lastSpoken) {
+                    const utter = new SpeechSynthesisUtterance(predictionText);
+                    window.speechSynthesis.speak(utter);
+                    lastSpoken = predictionText;
+                }
+            })
+            .catch(err => console.error("Prediction fetch error:", err));
+    }
+
+    function updateSentence() {
+        fetch('/current_sentence')
+            .then(res => res.json())
+            .then(data => {
+                document.getElementById("sentence-text").innerText = data.sentence;
+            });
+    }
+
+    setInterval(() => {
+        updatePrediction();
+        updateSentence();
+    }, 500);
+</script>
+{% endblock %}

@@ -1,0 +1,78 @@
+{% extends "base.html" %}
+{% block title %}Practice{% endblock %}
+{% block content %}
+<div class="max-w-2xl mx-auto bg-white rounded-lg shadow-lg p-8">
+    <h2 class="text-2xl font-bold text-blue-800 mb-6">Practice Mode</h2>
+    <p class="mb-4 text-gray-700">
+        Try to perform the following sign in front of your webcam. The system will recognize your gesture and give you instant feedback!
+    </p>
+      <!-- Additional Section: Sample Sign Images -->
+  <div class="mt-12">
+    <h2 class="text-2xl font-bold text-blue-700 mb-4 text-center">ASL Hand Signs</h2>
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 my-8">
+      <img src="{{ url_for('static', filename='images/hand-signs-of-the-ASL-Language.png') }}"
+           alt="ASL Chart 1" class="rounded-lg shadow-md w-full h-auto">
+      <img src="{{ url_for('static', filename='images/sign language 2.jpg') }}"
+           alt="ASL Chart 2" class="rounded-lg shadow-md w-full h-auto">
+    </div>
+  </div>
+    <div class="flex flex-col items-center mb-8">
+        <div class="text-5xl font-extrabold text-blue-700 mb-2">{{ target_sign }}</div>
+        <div class="text-gray-600">Show this sign to your camera</div>
+    </div>
+    <div class="w-full aspect-w-16 aspect-h-9 bg-gray-200 rounded-lg overflow-hidden mb-4">
+        <img src="{{ url_for('video_feed') }}" class="object-cover w-full h-full" alt="Webcam Feed">
+    </div>
+    <div class="w-full text-center">
+        <div class="text-4xl font-extrabold text-blue-900 mb-2" id="practice-prediction-text">-</div>
+        <div class="w-full h-3 bg-gray-200 rounded-full mb-2">
+            <div id="practice-confidence-bar" class="h-3 bg-blue-500 rounded-full transition-all duration-300" style="width:0%"></div>
+        </div>
+        <div class="text-gray-600" id="practice-confidence-text">0% Confidence</div>
+        <div class="mt-4" id="practice-feedback"></div>
+    </div>
+    <form method="GET" action="{{ url_for('practice') }}">
+        <button type="submit" class="mt-8 px-6 py-3 bg-blue-700 text-white rounded-lg font-bold hover:bg-blue-800 transition">Try Another Sign</button>
+    </form>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    const targetSign = "{{ target_sign }}";
+    let lastSpoken = "";
+
+    function updatePrediction() {
+        fetch('/get_prediction')
+            .then(response => response.json())
+            .then(data => {
+                const predictionText = data.text;
+                const confidence = parseFloat(data.confidence);
+
+                document.getElementById('practice-prediction-text').innerText = predictionText;
+                document.getElementById('practice-confidence-bar').style.width = `${confidence * 100}%`;
+                document.getElementById('practice-confidence-text').innerText = `${Math.round(confidence * 100)}% Confidence`;
+
+                let feedback = "";
+                if (predictionText === targetSign && confidence > 0.7) {
+                    feedback = "<span class='text-green-600 font-bold'>Great job! You matched the sign!</span>";
+                } else if (confidence > 0.7) {
+                    feedback = "<span class='text-red-600 font-bold'>That's the sign for " + predictionText + ". Try again!</span>";
+                } else {
+                    feedback = "<span class='text-gray-500'>Show your sign clearly to the camera.</span>";
+                }
+                document.getElementById('practice-feedback').innerHTML = feedback;
+
+                // Text-to-speech if confident and new
+                if (predictionText !== '-' && confidence > 0.7 && predictionText !== lastSpoken) {
+                    const utter = new SpeechSynthesisUtterance(predictionText);
+                    window.speechSynthesis.speak(utter);
+                    lastSpoken = predictionText;
+                }
+            })
+            .catch(err => console.error("Prediction fetch error:", err));
+    }
+
+    setInterval(updatePrediction, 500);  // Update every 500ms
+</script>
+{% endblock %}
